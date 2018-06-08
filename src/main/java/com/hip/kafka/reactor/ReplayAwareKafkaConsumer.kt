@@ -5,6 +5,7 @@ import com.hip.kafka.reactor.streams.InputStreams
 import com.hip.reactive.component1
 import com.hip.reactive.component2
 import com.hip.utils.log
+import io.micrometer.core.instrument.MeterRegistry
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.springframework.stereotype.Component
@@ -33,10 +34,16 @@ class ReplayAwareKafkaConsumer(
    private val eventProcessorRouter: EventProcessorRouter,
    private val receiverOptions: ReceiverOptions<String, Any>,
    private val senderOptions: SenderOptions<String, Any>,
-   private val inputStreams: InputStreams
+   private val inputStreams: InputStreams,
+   private val meterRegistry: MeterRegistry
 ) {
 
    private val initialOffsets = ConcurrentHashMap<TopicPartition, Long>()
+
+   private val timersByTopic = inputStreams.allTopics()
+      .map { topic ->
+         topic to meterRegistry.timer("event-${receiverOptions.identifier()}", "topic", topic)
+      }.toMap()
 
    @PostConstruct
    fun consumeMessages() {
@@ -45,26 +52,26 @@ class ReplayAwareKafkaConsumer(
       val receiver = createReceiver(receiverOptions, transactionManager)
 
       receiver.concatMap { consumerRecordsFlux ->
-         sender.send(getRecordsToSend(consumerRecordsFlux))
+         sender.send(processAndGetResponse(consumerRecordsFlux))
             .concatWith(transactionManager.commit<SenderResult<String>?>())
       }.subscribe()
    }
 
-   private fun createReceiver(receiverOptions: ReceiverOptions<String, Any>, transactionManager: TransactionManager?): Flux<Flux<ConsumerRecord<String, Any>>> {
+   private fun createReceiver(receiverOptions: ReceiverOptions<String, Any>, transactionManager: TransactionManager): Flux<Flux<ConsumerRecord<String, Any>>> {
       return KafkaReceiver.create(receiverOptions.subscription(inputStreams.allTopics())
          .addRevokeListener({ partitions -> log().warn("onPartitionsRevoked {}", partitions) })
          .addAssignListener({ partitions: Collection<ReceiverPartition> -> partitions.forEach { captureCurrentOffsetAndSeekToBeginning(it) } })
       ).receiveExactlyOnce(transactionManager)
    }
 
-   private fun getRecordsToSend(consumerRecordsFlux: Flux<ConsumerRecord<String, Any>>): Flux<SenderRecord<String, Any, String>?>? {
+   private fun processAndGetResponse(consumerRecordsFlux: Flux<ConsumerRecord<String, Any>>): Flux<SenderRecord<String, Any, String>> {
       return consumerRecordsFlux
-         .concatMap { consumerRecord -> processEvent(consumerRecord) }
+         .concatMap { consumerRecord -> timersByTopic[consumerRecord.topic()]!!.recordCallable { processEvent(consumerRecord) } }
          .filter { (record, consumerRecord) -> isReplaying(consumerRecord, record) }
          .map { (record, consumerRecord) -> createSenderRecord(record, consumerRecord) }
    }
 
-   private fun createSenderRecord(record: Any, consumerRecord: ConsumerRecord<String, Any>): SenderRecord<String, Any, String>? {
+   private fun createSenderRecord(record: Any, consumerRecord: ConsumerRecord<String, Any>): SenderRecord<String, Any, String> {
       log().info("Sending record $record")
       return SenderRecord.create(getTopic(record), consumerRecord.partition(), null, consumerRecord.key(), record, consumerRecord.key())
    }
@@ -77,7 +84,7 @@ class ReplayAwareKafkaConsumer(
       return isReplaying
    }
 
-   private fun processEvent(consumerRecord: ConsumerRecord<String, Any>): Flux<Tuple2<Any, ConsumerRecord<String, Any>>>? {
+   private fun processEvent(consumerRecord: ConsumerRecord<String, Any>): Flux<Tuple2<Any, ConsumerRecord<String, Any>>> {
       val handleEvent = eventProcessorRouter.handleEvent(consumerRecord.value())
       return handleEvent.zipWith(Mono.just(consumerRecord))
    }

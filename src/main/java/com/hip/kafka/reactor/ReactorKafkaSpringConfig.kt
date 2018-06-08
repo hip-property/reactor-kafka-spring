@@ -12,7 +12,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.support.serializer.JsonDeserializer
-import org.springframework.kafka.support.serializer.JsonSerializer
 import reactor.kafka.receiver.ReceiverOptions
 import reactor.kafka.sender.SenderOptions
 import java.util.*
@@ -54,7 +53,14 @@ class ReactorKafkaSpringReceiverConfig {
 
       return ReceiverOptions.create(props)
    }
+}
 
+/**
+ * Uniquely identifies a consumer.  For now just use client id.  Eventually we will
+ * want to concat the group id.
+ */
+fun ReceiverOptions<*, *>.identifier(): String {
+   return "${consumerProperties()[ConsumerConfig.CLIENT_ID_CONFIG]}"
 }
 
 @Configuration
@@ -88,7 +94,7 @@ class ReactorKafkaSpringSenderConfig {
       props[ProducerConfig.ACKS_CONFIG] = "all"
       props[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.java
       props[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = KotlinJsonSerializer::class.java
-      if(kafkaTransaction != null) {
+      if (kafkaTransaction != null) {
          props[ProducerConfig.TRANSACTIONAL_ID_CONFIG] = kafkaTransaction!!
       }
       return SenderOptions.create<String, Any>(props)

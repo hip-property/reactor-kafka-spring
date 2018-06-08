@@ -39,19 +39,24 @@ class EventProcessorRouter(
          }
       }
 
+      // configure the subscribers to request a single message at a time.
+      // after this message is consumed push all messages generated on output streams to the kafka publisher
+      // this will ensure that the exactly once semantics holds as the inbound message will be withing the same
+      // transaction as the outbound message
       inputStreams.allFluxes().forEach { flux ->
-         flux.subscribe(object : Subscriber<Any> { // todo should we use BaseSubscriber?
-            private lateinit var s: Subscription
+         flux.subscribe(object : Subscriber<Any> {
+            private lateinit var subscription: Subscription
 
-            override fun onSubscribe(s: Subscription) {
-               this.s = s
-               this.s.request(1)
+            override fun onSubscribe(subscription: Subscription) {
+               this.subscription = subscription
+               this.subscription.request(1)
             }
 
             override fun onNext(event: Any) {
+               // complete the per message flux
                eventResponseFlux!!.complete()
                eventResponseFlux = null
-               s.request(1)
+               subscription.request(1)
             }
 
             override fun onError(t: Throwable) {

@@ -6,3 +6,14 @@ kafka:
 logging:
   level:
     reactor.kafka.sender.internals: DEBUG
+
+management:
+   health:
+     kafka:
+       enabled: false
+   endpoints:
+      web:
+         exposure.include: "health,info,prometheus"
+         path-mapping:
+            health: health
+         base-path: /
