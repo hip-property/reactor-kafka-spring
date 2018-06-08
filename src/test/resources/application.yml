@@ -1,0 +1,8 @@
+kafka:
+  transaction:  testAppTxn
+  group: kafkaGroup
+  clientId: testClientId
+
+logging:
+  level:
+    reactor.kafka.sender.internals: DEBUG
