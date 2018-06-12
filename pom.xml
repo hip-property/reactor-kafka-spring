@@ -10,6 +10,24 @@
    <modelVersion>4.0.0</modelVersion>
 
    <artifactId>reactor-kafka-spring</artifactId>
+   <name>Reactive Kafka</name>
+   <description>Reactive consuming and publishing to Kafka in a Spring / Reactor stack</description>
+   <licenses>
+      <license>
+         <name>Apache License</name>
+         <url>http://www.apache.org/licenses/</url>
+      </license>
+   </licenses>
+   <inceptionYear>2018</inceptionYear>
+   <organization>
+      <name>HiP Property</name>
+      <url>https://hip.property</url>
+   </organization>
+   <properties>
+      <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+      <license.licenseName>apache_v2</license.licenseName>
+   </properties>
+
 
    <dependencies>
       <dependency>
@@ -57,6 +75,33 @@
                   <goals>
                      <goal>test-jar</goal>
                   </goals>
+               </execution>
+            </executions>
+         </plugin>
+         <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>license-maven-plugin</artifactId>
+            <version>1.16</version>
+            <configuration>
+               <verbose>false</verbose>
+               <sectionDelimiter>.</sectionDelimiter>
+               <processStartTag>=========================================================BeginLicense</processStartTag>
+               <processEndTag>===========================================================EndLicense</processEndTag>
+            </configuration>
+            <executions>
+               <execution>
+                  <id>first</id>
+                  <goals>
+                     <goal>update-file-header</goal>
+                  </goals>
+                  <phase>process-sources</phase>
+                  <configuration>
+                     <licenseName>apache_v2</licenseName>
+                     <roots>
+                        <root>src/main/java</root>
+                        <root>src/test/java</root>
+                     </roots>
+                  </configuration>
                </execution>
             </executions>
          </plugin>
